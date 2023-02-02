@@ -36,7 +36,7 @@ class PrecompDataset(data.Dataset):
                 self.caption_non.append(line.strip())
 
         # Image features
-        self.images = np.load(loc + '%s_ims.npy' % data_split, allow_pickle=True)
+        self.images = np.load(loc + '%s_ims.npy' % data_split, allow_pickle=True)         # allow_pickle ???
         self.length = len(self.caption_non)
 
         print('image shape', self.images.shape)
@@ -94,7 +94,7 @@ def collate_fn(data):
 
     # Merget captions (convert tuple of 1D tensor to 2D tensor)
     lengths = [len(cap) for cap in captions]
-    targets = torch.zeros(len(captions), max(lengths)).long()
+    targets = torch.zeros(len(captions), max(lengths)).long()         # every batch, the tensor of caption has different length
     for i, cap in enumerate(captions):
         end = lengths[i]
         targets[i, :end] = cap[:end]
@@ -104,7 +104,7 @@ def collate_fn(data):
 def get_precomp_loader(data_path, data_split, vocab, opt, batch_size=100,
                        shuffle=True, num_workers=2):
     """Returns torch.utils.data.DataLoader for custom coco dataset."""
-    dset = PrecompDataset(data_path, data_split, vocab)
+    dset = PrecompDataset(data_path, data_split, vocab)        # only data_split different 'train' or 'dev' or 'test'
 
     data_loader = torch.utils.data.DataLoader(dataset=dset,
                                               batch_size=batch_size,
