@@ -56,7 +56,7 @@ def main():
                         help='Number of GRU layers.')
     parser.add_argument('--learning_rate', default=.0005, type=float,
                         help='Initial learning rate.')
-    parser.add_argument('--lr_update', default=20, type=int,
+    parser.add_argument('--lr_update', default=20, type=int,                   # 10
                         help='Number of epochs to update the learning rate.')
     parser.add_argument('--workers', default=10, type=int,
                         help='Number of data loader workers.')
@@ -84,17 +84,17 @@ def main():
                         help='Do not normalize the text embeddings.')
     parser.add_argument('--lambda_softmax', default=20., type=float,
                         help='Attention softmax temperature.')
-    parser.add_argument('--mean_neg', default=0, type=float,
+    parser.add_argument('--mean_neg', default=0, type=float,                 # 均值
                         help='Mean value of mismatched distribution.')                        
-    parser.add_argument('--stnd_neg', default=0, type=float,
+    parser.add_argument('--stnd_neg', default=0, type=float,                 # 标准差
                         help='Standard deviation of mismatched distribution.')
     parser.add_argument('--mean_pos', default=0, type=float,
                         help='Mean value of matched distribution.')
     parser.add_argument('--stnd_pos', default=0, type=float,
                         help='Standard deviation of matched distribution.')
-    parser.add_argument('--thres', default=0, type=float,
+    parser.add_argument('--thres', default=0, type=float,                    # 最优学习间隔
                         help='Optimal learning  boundary.')
-    parser.add_argument('--thres_safe', default=0, type=float,
+    parser.add_argument('--thres_safe', default=0, type=float,               # ???
                         help='Optimal learning  boundary.')
     parser.add_argument('--alpha', default=2.0, type=float,
                         help='Initial penalty parameter.')
@@ -107,10 +107,24 @@ def main():
     tb_logger.configure(opt.logger_name, flush_secs=5)
 
     # Load Vocabulary Wrapper
-    if opt.precomp_enc_text_type == 'GloVe':
+    if opt.precomp_enc_text_type == 'GloVe':                     # Yes 
         vocab = deserialize_vocab(os.path.join(opt.vocab_path, '%s.json' % opt.data_name)) 
     else:
         vocab = deserialize_vocab(os.path.join(opt.vocab_path, '%s_vocab.json' % opt.data_name)) 
+    
+    '''
+      def deserialize_vocab(src):
+        print(src)
+        with open(src) as f:
+            d = json.load(f)
+        vocab = Vocabulary()
+
+        vocab.word2idx = d['word2idx']
+        vocab.idx2word = {v: k for k, v in vocab.word2idx.items()}
+        vocab.idx = max(vocab.idx2word)
+        
+        return vocab
+    '''
     opt.vocab_size = len(vocab)
 
     # Load data loaders
