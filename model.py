@@ -48,7 +48,7 @@ def EncoderImage(data_name, img_dim, embed_size, precomp_enc_type='basic',
     """A wrapper to image encoders. Chooses between an different encoders
     that uses precomputed image features.
     """
-    if precomp_enc_type == 'basic':
+    if precomp_enc_type == 'basic':           # Yes
         img_enc = EncoderImagePrecomp(
             img_dim, embed_size, no_imgnorm)
     elif precomp_enc_type == 'weight_norm':
@@ -94,7 +94,7 @@ class EncoderImagePrecomp(nn.Module):
 
         return features
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict):                      # 避免多的参数造成报错，但好像有相关参数来完成这一步
         """Copies parameters. overwritting the default one to
         accept state_dict from Full model
         """
@@ -113,7 +113,7 @@ class EncoderImageWeightNormPrecomp(nn.Module):
         super(EncoderImageWeightNormPrecomp, self).__init__()
         self.embed_size = embed_size
         self.no_imgnorm = no_imgnorm
-        self.fc = weight_norm(nn.Linear(img_dim, embed_size), dim=None)
+        self.fc = weight_norm(nn.Linear(img_dim, embed_size), dim=None)      # 
 
     def forward(self, images):
         """Extract image feature vectors."""
@@ -189,16 +189,17 @@ class EncoderText(nn.Module):
 
 
 # RNN GloVe Based Language Model
+# 与传统RNN的差别在于，nn.Embedding的参数是否是载入的
 
 class GloveEmb(nn.Module):
 
     def __init__(
             self,
-            num_embeddings,
-            glove_dim,
+            num_embeddings,                    # vocab_size
+            glove_dim,                         # 300
             glove_path,
-            add_rand_embed=False,
-            rand_dim=None,
+            add_rand_embed=False,              # False
+            rand_dim=None,                     # 300
             **kwargs
         ):
         super(GloveEmb, self).__init__()
@@ -211,8 +212,8 @@ class GloveEmb(nn.Module):
         # word embedding
         self.glove = nn.Embedding(num_embeddings, glove_dim)
         glove = nn.Parameter(torch.load(glove_path))
-        self.glove.weight = glove
-        self.glove.requires_grad = False
+        self.glove.weight = glove                 # 只要了weight,没有bias
+        self.glove.requires_grad = False   
 
         if add_rand_embed:
             self.embed = nn.Embedding(num_embeddings, rand_dim)
@@ -235,9 +236,9 @@ class GloveEmb(nn.Module):
 class GloveRNNEncoder(nn.Module):
 
     def __init__(
-        self, vocab_size, embed_dim, latent_size,
-        num_layers=1, use_bi_gru=True, no_txtnorm=False,
-        glove_path=None, add_rand_embed=True):
+        self, vocab_size, embed_dim, latent_size,            # 有点问题，这里embed_dim = 300, latent_size = 1024
+        num_layers=1, use_bi_gru=True, no_txtnorm=False,  
+        glove_path=None, add_rand_embed=True):               # False
 
         super(GloveRNNEncoder, self).__init__()
         self.latent_size = latent_size
@@ -290,10 +291,10 @@ class GloveRNNEncoder(nn.Module):
 def get_mask_attention(attn, batch_size, sourceL, queryL, lamda=1):
     # attn --> (batch, sourceL, queryL)
     # positive attention
-    mask_positive = attn.le(0)
+    mask_positive = attn.le(0)                # 小于等于
     attn_pos = attn.masked_fill(mask_positive, torch.tensor(-1e9))
     attn_pos = torch.exp(attn_pos * lamda)
-    attn_pos = l1norm(attn_pos, 1)
+    attn_pos = l1norm(attn_pos, 1)            # softmax
     attn_pos = attn_pos.view(batch_size, queryL, sourceL)
 
     return  attn_pos
@@ -302,8 +303,8 @@ def get_mask_attention(attn, batch_size, sourceL, queryL, lamda=1):
 def cosine_similarity(x1, x2, dim=1, eps=1e-8):
     """Returns cosine similarity between x1 and x2, computed along dim."""
     w12 = torch.sum(x1 * x2, dim)
-    w2 = torch.norm(x2, 2, dim)
-    return (w12 / (w2).clamp(min=eps)).squeeze()
+    w2 = torch.norm(x2, 2, dim)                              # 怎么只有w2,w1嘞???
+    return (w12 / (w2).clamp(min=eps)).squeeze()             # clamp 设置上下限
 
 
 def intra_relation(K, Q, xlambda):
@@ -329,7 +330,7 @@ def inter_relations(attn, batch_size, sourceL, queryL, xlambda):
     return (batch, queryL, sourceL)
     """
 
-    attn = nn.LeakyReLU(0.1)(attn)
+    attn = nn.LeakyReLU(0.1)(attn)                   # 
     attn = l2norm(attn, 2)
     # --> (batch, queryL, sourceL)
     attn = torch.transpose(attn, 1, 2).contiguous()
@@ -340,7 +341,7 @@ def inter_relations(attn, batch_size, sourceL, queryL, xlambda):
     # --> (batch, queryL, sourceL)
     attn = attn.view(batch_size, queryL, sourceL)
 
-    return attn
+    return attn                                  # 输出的softmax权重
 
 
 
@@ -385,59 +386,60 @@ def xattn_score(images, captions, cap_lens, opt):
         # attention matrix between all text words and image regions
         attn = torch.bmm(cap_i_expand, contextT)
         attn_i = torch.transpose(attn, 1, 2).contiguous()
-        attn_thres = attn - torch.ones_like(attn) * opt.thres
+        attn_thres = attn - torch.ones_like(attn) * opt.thres           # 这里乘的是0
 
         # # --------------------------------------------------------------------------------------------------------------------------
         # Neg-Pos Branch Matching
         # negative attention 
         batch_size, queryL, sourceL = images.size(0), cap_i_expand.size(1), images.size(1)
-        attn_row = attn_thres.view(batch_size * queryL, sourceL)
-        Row_max = torch.max(attn_row, 1)[0].unsqueeze(-1)
-        attn_neg = Row_max.lt(0).float()
+        attn_row = attn_thres.view(batch_size * queryL, sourceL)        # [b*l, 36]
+        Row_max = torch.max(attn_row, 1)[0].unsqueeze(-1)               # [b*l, 1]
+        attn_neg = Row_max.lt(0).float()                                # .lt 小于
         t2i_sim_neg = Row_max * attn_neg
         # negative effects
-        t2i_sim_neg = t2i_sim_neg.view(batch_size, queryL)
+        t2i_sim_neg = t2i_sim_neg.view(batch_size, queryL)              # 感觉少了考虑单词上下文的相似度
 
         # positive attention 
         # 1) positive effects based on aggregated features
-        attn_pos = get_mask_attention(attn_row, batch_size, sourceL, queryL, opt.lambda_softmax)
-        weiContext_pos = torch.bmm(attn_pos, images)
-        t2i_sim_pos_f = cosine_similarity(cap_i_expand, weiContext_pos, dim=2)
+        attn_pos = get_mask_attention(attn_row, batch_size, sourceL, queryL, opt.lambda_softmax)          # [b, l, 36]
+        weiContext_pos = torch.bmm(attn_pos, images)                                                      # [b, l, d]
+        t2i_sim_pos_f = cosine_similarity(cap_i_expand, weiContext_pos, dim=2)                            # [b, l]
 
         # 2) positive effects based on relevance scores
-        attn_weight = inter_relations(attn_i, batch_size, n_region, n_word, opt.lambda_softmax)
+        attn_weight = inter_relations(attn_i, batch_size, n_region, n_word, opt.lambda_softmax)           # attn_i [b, 36, l]
         t2i_sim_pos_r = attn.mul(attn_weight).sum(-1)
 
         t2i_sim_pos = t2i_sim_pos_f + t2i_sim_pos_r
 
-        t2i_sim =  t2i_sim_neg + t2i_sim_pos
-        sim = t2i_sim.mean(dim=1, keepdim=True)
+        t2i_sim =  t2i_sim_neg + t2i_sim_pos                       # [b, l]
+        sim = t2i_sim.mean(dim=1, keepdim=True)                    # [b, 1]
         # # --------------------------------------------------------------------------------------------------------------------------
 
         # Discriminative Mismatch Mining
         # # --------------------------------------------------------------------------------------------------------------------------
-        wrong_index =  sim.sort(0, descending=True)[1][0].item()
+        wrong_index =  sim.sort(0, descending=True)[1][0].item()              # [1]排序index [0]选第一个，最大的，因为shape为[b, 1]所以还用了.item
         # Based on the correctness of the calculated similarity ranking, we devise to decide whether to update at each sampling time.
-        if (wrong_index == i):
+        if (wrong_index == i):                                                # 当匹配正确时，才进行采样
             # positive samples
             attn_max_row = torch.max(attn.reshape(batch_size * n_word, n_region).squeeze(), 1)[0].cuda() 
-            attn_max_row_pos = attn_max_row[(i * n_word) : (i * n_word + n_word)].cuda()
+            attn_max_row_pos = attn_max_row[(i * n_word) : (i * n_word + n_word)].cuda()                  # 只要自己匹配的两个之间的相似度
 
             # negative samples
-            neg_index =  sim.sort(0)[1][0].item()
+            neg_index =  sim.sort(0)[1][0].item()            # 选最不像的
             attn_max_row_neg = attn_max_row[(neg_index * n_word) : (neg_index * n_word + n_word)].cuda()
 
             max_pos.append(attn_max_row_pos)
             max_neg.append(attn_max_row_neg)
             N_POS_WORD = N_POS_WORD + n_word
             if N_POS_WORD > 200: # 200 is the empirical value to make adequate samplings 
-                max_pos_aggre = torch.cat(max_pos, 0)
+                max_pos_aggre = torch.cat(max_pos, 0)       # [length of list]
                 max_neg_aggre = torch.cat(max_neg, 0)
                 mean_pos =  max_pos_aggre.mean().cuda()
                 mean_neg =  max_neg_aggre.mean().cuda()
                 stnd_pos = max_pos_aggre.std()
                 stnd_neg = max_neg_aggre.std()
-
+                
+                # 这里应该就是求解最优边界的算法
                 A = stnd_pos.pow(2) - stnd_neg.pow(2)
                 B = 2*((mean_pos*stnd_neg.pow(2)) - (mean_neg*stnd_pos.pow(2)))
                 C = (mean_neg*stnd_pos).pow(2) - (mean_pos*stnd_neg).pow(2) + 2*(stnd_pos*stnd_neg).pow(2)*torch.log(stnd_neg/(opt.alpha*stnd_pos) + 1e-8)
@@ -530,16 +532,16 @@ class NAAF(object):
 
     def __init__(self, opt):
         # Build Models
-        self.grad_clip = opt.grad_clip
-        self.img_enc = EncoderImage(opt.data_name, opt.img_dim, opt.embed_size,
-                                    precomp_enc_type=opt.precomp_enc_type,
+        self.grad_clip = opt.grad_clip                    # 2
+        self.img_enc = EncoderImage(opt.data_name, opt.img_dim, opt.embed_size,     # 2048 -> 1024
+                                    precomp_enc_type=opt.precomp_enc_type,          # basic
                                     no_imgnorm=opt.no_imgnorm)
 
-        if opt.precomp_enc_text_type == 'basic':
+        if opt.precomp_enc_text_type == 'basic':          
             self.txt_enc = EncoderText(opt.vocab_size, opt.word_dim,
                                     opt.embed_size, opt.num_layers,
                                     no_txtnorm=opt.no_txtnorm)
-        else:
+        else:                                             # GloVe
             if opt.data_name == 'f30k_precomp':
                 GloVe_path = opt.vocab_path + 'glove_840B_f30k_precomp.json.pkl'
                 self.txt_enc = GloveRNNEncoder(opt.vocab_size, opt.word_dim,
